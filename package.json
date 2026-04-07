@@ -1,0 +1,15 @@
+{
+  "name": "pix-challenge",
+  "version": "1.0.0",
+  "description": "Desafio tecnico — Pix Service",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "better-sqlite3": "^11.0.0",
+    "jsonwebtoken": "^9.0.0"
+  }
+}
