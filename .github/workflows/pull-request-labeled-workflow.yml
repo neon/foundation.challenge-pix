@@ -1,0 +1,16 @@
+name: Pull Request Labeled
+on:
+  pull_request:
+    types:
+      - labeled
+      - synchronize
+jobs:
+  label:
+    if: ${{ (github.event.action == 'labeled' || github.event.action == 'synchronize') }}
+    uses: neon/engenharia.utils-workflows/.github/workflows/pull-request-labeled.yml@main
+    secrets:
+      PAT: ${{ secrets.PAT }}
+      DEV_VAULT_ROLE_ID: ${{ secrets.DEV_VAULT_ROLE_ID }}
+      DEV_VAULT_SECRET_ID: ${{ secrets.DEV_VAULT_SECRET_ID }}
+      HML_VAULT_ROLE_ID: ${{ secrets.HML_VAULT_ROLE_ID }}
+      HML_VAULT_SECRET_ID: ${{ secrets.HML_VAULT_SECRET_ID }}

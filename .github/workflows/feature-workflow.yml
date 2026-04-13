@@ -1,0 +1,17 @@
+name: Feature Workflow
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+jobs:
+  ci:
+    uses: neon/engenharia.utils-workflows/.github/workflows/ci.yml@main
+    secrets:
+      PAT: ${{ secrets.PAT }}
+      GLOBAL_VAULT_ROLE_ID: ${{ secrets.HML_VAULT_ROLE_ID }}
+      GLOBAL_VAULT_SECRET_ID: ${{ secrets.HML_VAULT_SECRET_ID }}
+    with:
+      ENV: hml

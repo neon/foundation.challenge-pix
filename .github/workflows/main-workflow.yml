@@ -1,0 +1,32 @@
+name: Main Workflow
+on:
+  workflow_dispatch: {}
+  push:
+    branches: main
+jobs:
+  ci:
+    uses: neon/engenharia.utils-workflows/.github/workflows/ci.yml@main
+    secrets:
+      PAT: ${{ secrets.PAT }}
+      GLOBAL_VAULT_ROLE_ID: ${{ secrets.HML_VAULT_ROLE_ID }}
+      GLOBAL_VAULT_SECRET_ID: ${{ secrets.HML_VAULT_SECRET_ID }}
+    with:
+      ENV: hml
+  deploy-hml:
+    if: ${{ success() }}
+    needs:
+      - ci
+    uses: neon/engenharia.utils-workflows/.github/workflows/hml-workflow.yml@main
+    secrets:
+      PAT: ${{ secrets.PAT }}
+      GLOBAL_VAULT_ROLE_ID: ${{ secrets.HML_VAULT_ROLE_ID }}
+      GLOBAL_VAULT_SECRET_ID: ${{ secrets.HML_VAULT_SECRET_ID }}
+  deploy-prd:
+    if: ${{ success() }}
+    needs:
+      - deploy-hml
+    uses: neon/engenharia.utils-workflows/.github/workflows/prd-workflow.yml@main
+    secrets:
+      PAT: ${{ secrets.PAT }}
+      GLOBAL_VAULT_ROLE_ID: ${{ secrets.PRD_VAULT_ROLE_ID }}
+      GLOBAL_VAULT_SECRET_ID: ${{ secrets.PRD_VAULT_SECRET_ID }}
