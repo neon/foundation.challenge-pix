@@ -4,12 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function createDb() {
-  const db = new Database(join(__dirname, '..', '..', 'pix.db'));
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  db.exec(`
+const SEED_SQL = `
     DROP TABLE IF EXISTS transactions;
     DROP TABLE IF EXISTS accounts;
 
@@ -51,7 +46,17 @@ export function createDb() {
       ('1003', 'chave-pedro@pix',  1000.00, 'completed', '2026-03-26 14:30:00', NULL),
       ('1004', 'chave-ana@pix',    3000.00, 'completed', '2026-03-26 09:00:00', NULL),
       ('1001', 'chave-loja@pix',    150.00, 'completed', '2026-03-26 18:30:00', NULL);
-  `);
+`;
 
+export function createDb(dbPath) {
+  const path = dbPath || process.env.DB_PATH || join(__dirname, '..', '..', 'pix.db');
+  const db = new Database(path);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.exec(SEED_SQL);
   return db;
+}
+
+export function resetDb(db) {
+  db.exec(SEED_SQL);
 }
