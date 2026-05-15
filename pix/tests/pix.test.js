@@ -1,9 +1,20 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import jwt from 'jsonwebtoken';
 
 const BASE = 'http://localhost:3001';
 const SECRET = 'neon-pix-secret-2026';
+
+const TEST_DB_PATH = join(tmpdir(), `pix-test-${process.pid}-${Date.now()}.db`);
+process.env.DB_PATH = TEST_DB_PATH;
+process.env.TEST = '1';
+process.env.PORT = '3001';
+
+let dbHandle;
+let resetDb;
 
 function token(accountId, name = 'Test User') {
   return jwt.sign({ sub: accountId, name }, SECRET, { expiresIn: '1h' });
@@ -34,17 +45,27 @@ async function get(path, accountId = '1001') {
 let serverInstance;
 
 before(async () => {
-  process.env.TEST = '1';
-  process.env.PORT = '3001';
-  // server.js already calls createDb() on import — no need to call it again
-  const { app } = await import('../src/server.js');
+  const { app, db } = await import('../src/server.js');
+  const seed = await import('../src/db/seed.js');
+  dbHandle = db;
+  resetDb = seed.resetDb;
   await new Promise(r => {
     serverInstance = app.listen(3001, () => r());
   });
 });
 
-after(() => {
-  if (serverInstance) serverInstance.close();
+beforeEach(() => {
+  if (resetDb && dbHandle) resetDb(dbHandle);
+});
+
+after(async () => {
+  if (serverInstance) await new Promise(r => serverInstance.close(r));
+  if (dbHandle) {
+    try { dbHandle.close(); } catch {}
+  }
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { rmSync(TEST_DB_PATH + suffix, { force: true }); } catch {}
+  }
 });
 
 // ============================================================
@@ -110,33 +131,31 @@ describe('BUG: Seguranca - IDOR', () => {
     // O sistema DEVERIA rejeitar (403 ou similar)
     // Mas o bug faz o sistema aceitar — debita o Bruno sem autorizacao
     assert.equal(res.status, 403,
-      'IDOR: sistema permitiu debitar conta de outro usuario! O campo account no body nao e validado contra o JWT.');
+      'sistema permitiu debitar conta de outro usuario');
   });
 });
 
 describe('BUG: Resiliencia - debito sem compensacao', () => {
   it('deve reverter debito quando gateway falha', async () => {
-    // Tenta ate o gateway falhar (max 20 tentativas — gateway falha ~10% das vezes)
-    let gatewayFailed = false;
-    for (let attempt = 0; attempt < 20 && !gatewayFailed; attempt++) {
+    // Forca falha do gateway pra remover flakiness (gateway normal falha ~10%).
+    process.env.GATEWAY_FORCE_FAIL = '1';
+    try {
       const balanceBefore = (await get('/pix/balance/1004')).body.balance;
 
       const res = await post('/pix/send', {
         account: '1004',
-        amount: 1,  // valor pequeno pra nao esgotar saldo
+        amount: 1,
         destination: 'chave-resiliencia@pix',
       }, '1004');
 
-      if (res.status === 500) {
-        gatewayFailed = true;
-        // Gateway falhou — o debito deveria ter sido revertido
-        const balanceAfter = (await get('/pix/balance/1004')).body.balance;
-        assert.equal(balanceAfter, balanceBefore,
-          'Resiliencia: debito NAO foi revertido apos falha do gateway! Dinheiro ficou no limbo.');
-      }
+      assert.equal(res.status, 500, 'Gateway deveria ter falhado (forcado).');
+
+      const balanceAfter = (await get('/pix/balance/1004')).body.balance;
+      assert.equal(balanceAfter, balanceBefore,
+        'Resiliencia: debito NAO foi revertido apos falha do gateway! Dinheiro ficou no limbo.');
+    } finally {
+      delete process.env.GATEWAY_FORCE_FAIL;
     }
-    assert.ok(gatewayFailed,
-      'Gateway nao falhou em 20 tentativas — teste inconclusivo. Aumente o numero de tentativas.');
   });
 });
 
@@ -157,7 +176,7 @@ describe('BUG: Idempotencia - Pix duplicado', () => {
       const txns = (await get('/pix/transactions/1001')).body;
       const dupes = txns.filter(t => t.to_pix_key === 'chave-idem@pix' && t.amount === 75);
       assert.ok(dupes.length <= 1,
-        `Idempotencia: ${dupes.length} transacoes identicas processadas! Falta idempotency key.`);
+        `Idempotencia: ${dupes.length} transacoes identicas processadas!`);
     }
   });
 });

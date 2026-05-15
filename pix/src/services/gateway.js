@@ -10,7 +10,7 @@ export class GatewayService {
     await new Promise(r => setTimeout(r, delay));
 
     // 10% de chance de falha (timeout/erro)
-    if (Math.random() < 0.10) {
+    if (process.env.GATEWAY_FORCE_FAIL === '1' || Math.random() < 0.10) {
       throw new Error('GATEWAY_TIMEOUT');
     }
 
